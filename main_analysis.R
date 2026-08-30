@@ -3278,3 +3278,270 @@ grDevices::cairo_pdf(file.path(FG,"FigS1_structure.pdf"), width=w, height=h); pr
 ragg::agg_png(file.path(FG,"FigS1_structure_preview.png"), width=w, height=h, units="in", res=160); print(fig); dev.off()
 cat("Saved FigS1_structure (.pdf/.tiff/.png)\n")
 
+
+# =====================================================================
+# SECTION 27 | Table 1: baseline clinical characteristics by CI group
+# (extended version: sex, disease duration, education, Hoehn-Yahr,
+#  MDS-UPDRS I/II, CSF SAA positivity, RIN; 2026-08-28)
+# =====================================================================
+suppressPackageStartupMessages({ library(dplyr) })
+setwd("E:/PPMI帕金森数据库专用")
+OUT_DIR <- "E:/PPMI帕金森数据库专用/结果/新结果/实验/movementdisorders/new/revision_v2"
+FD <- file.path(OUT_DIR, "figures_pc1/data")   # defined here if section run standalone
+TAB <- "E:/PPMI帕金森数据库专用/结果/新结果/实验/movementdisorders/new/revision_v2/tables"
+
+pc1s <- read.csv(file.path(FD, "pc1_scores.csv"))
+pc1s$group <- factor(pc1s$group, levels = c("Low", "High"))
+
+# baseline (BL/SC) deduplication: keep first record per patient
+bl <- function(x) { x <- x[x$EVENT_ID %in% c("BL","SC"), ]; x[!duplicated(x$PATNO), ] }
+
+# sex / age
+pd <- read.csv(file.path(OUT_DIR, "data/PD_all_clustering_methods.csv"))
+pc1s$SEX  <- pd$SEX[match(pc1s$PATNO, pd$PATNO)]
+pc1s$AGE  <- as.numeric(pd$AGE_AT_VISIT[match(pc1s$PATNO, pd$PATNO)])
+
+# RIN (matched by Specimen Bar Code = SAMPLE_ID)
+meta <- read.csv("metaDataIR3.csv", check.names = FALSE)
+pc1s$RIN <- as.numeric(meta[["RIN Value"]][match(pc1s$SAMPLE_ID, meta[["Specimen Bar Code"]])])
+
+# MDS-UPDRS III / Hoehn-Yahr
+p3 <- bl(read.csv("运动症状数据/MDS-UPDRS_Part_III_29Jan2026.csv"))
+m3 <- match(pc1s$PATNO, p3$PATNO)
+pc1s$NP3TOT <- suppressWarnings(as.numeric(p3$NP3TOT[m3]))
+pc1s$NHY    <- suppressWarnings(as.numeric(p3$NHY[m3]))
+
+# MDS-UPDRS I (clinician) / II (patient questionnaire)
+p1 <- bl(read.csv("运动症状数据/MDS-UPDRS_Part_I_31Jan2026.csv"))
+pc1s$NP1RTOT <- suppressWarnings(as.numeric(p1$NP1RTOT[match(pc1s$PATNO, p1$PATNO)]))
+p2 <- bl(read.csv("运动症状数据/MDS_UPDRS_Part_II__Patient_Questionnaire_31Jan2026.csv"))
+pc1s$NP2PTOT <- suppressWarnings(as.numeric(p2$NP2PTOT[match(pc1s$PATNO, p2$PATNO)]))
+
+# disease duration: BL exam date - PD diagnosis date (MM/YYYY -> months)
+dx <- bl(read.csv("CI_影像学分析/data/longitudinal_imaging/raw_inputs/PD_Diagnosis_History_05Apr2026.csv"))
+pddx <- dx$PDDXDT[match(pc1s$PATNO, dx$PATNO)]
+exam <- p3$EXAMDT[m3]
+my <- function(s) { v <- suppressWarnings(as.integer(unlist(strsplit(as.character(s), "/"))))
+                    if (length(v) == 2 && !any(is.na(v))) v[1] + 12 * v[2] else NA }
+dur <- rep(NA_real_, nrow(pc1s))
+for (i in seq_len(nrow(pc1s))) {
+  b <- my(exam[i]); d <- my(pddx[i])
+  if (!is.na(b) && !is.na(d) && b >= d) dur[i] <- (b - d) / 12
+}
+pc1s$DUR <- dur
+
+# education (Socio-Economics, SC)
+edu <- read.csv("ppmi数据表/Subject_Characteristics/Socio-Economics_05Apr2026.csv")
+edu <- edu[edu$EVENT_ID %in% c("SC","BL"), ]; edu <- edu[!duplicated(edu$PATNO), ]
+pc1s$EDUC <- suppressWarnings(as.numeric(edu$EDUCYRS[match(pc1s$PATNO, edu$PATNO)]))
+
+# CSF SAA status (BL, Cerebrospinal Fluid)
+saa <- read.csv("运动症状数据/SAA_Biospecimen_Analysis_Results_23Feb2026.csv")
+saa <- saa[saa$CLINICAL_EVENT == "BL" & saa$TYPE == "Cerebrospinal Fluid" & saa$COHORT == "PD", ]
+saa <- saa[!duplicated(saa$PATNO), ]
+pc1s$SAA <- saa$SAA_Status[match(pc1s$PATNO, saa$PATNO)]
+
+# ---- assemble Table 1 ----
+d <- pc1s
+t1 <- data.frame()
+
+cont <- list(
+  c("Age, years",              "AGE"),
+  c("Disease duration, years", "DUR"),
+  c("Education, years",        "EDUC"),
+  c("Hoehn-Yahr stage",        "NHY"),
+  c("MDS-UPDRS I total",       "NP1RTOT"),
+  c("MDS-UPDRS II total",      "NP2PTOT"),
+  c("MDS-UPDRS III total",     "NP3TOT"),
+  c("RNA integrity number",    "RIN")
+)
+for (v in cont) {
+  nm <- v[1]; k <- v[2]
+  lo <- as.numeric(d[[k]][d$group == "Low"]);  lo <- lo[!is.na(lo)]
+  hi <- as.numeric(d[[k]][d$group == "High"]); hi <- hi[!is.na(hi)]
+  p  <- tryCatch(wilcox.test(lo, hi)$p.value, error = function(e) NA)
+  t1 <- rbind(t1, data.frame(Variable = nm, Type = "continuous",
+    n_Low = length(lo), n_High = length(hi),
+    Low = sprintf("%.2f (%.2f)", mean(lo), sd(lo)),
+    High = sprintf("%.2f (%.2f)", mean(hi), sd(hi)),
+    P = ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)), stringsAsFactors = FALSE))
+}
+
+catv <- list(c("Sex, male", "SEX", "Male"), c("CSF SAA positive", "SAA", "Positive"))
+for (v in catv) {
+  nm <- v[1]; k <- v[2]; lvl <- v[3]
+  lo <- droplevels(factor(d[[k]][d$group == "Low"]))
+  hi <- droplevels(factor(d[[k]][d$group == "High"]))
+  lo <- lo[!is.na(lo)]; hi <- hi[!is.na(hi)]
+  tab <- rbind(table(lo), table(hi))
+  p <- tryCatch(fisher.test(tab)$p.value, error = function(e) NA)
+  t1 <- rbind(t1, data.frame(Variable = nm, Type = "categorical",
+    n_Low = length(lo), n_High = length(hi),
+    Low = sprintf("%d (%.1f%%)", sum(lo == lvl), 100 * mean(lo == lvl)),
+    High = sprintf("%d (%.1f%%)", sum(hi == lvl), 100 * mean(hi == lvl)),
+    P = sprintf("%.3f", p), stringsAsFactors = FALSE))
+}
+
+print(t1, row.names = FALSE)
+write.csv(t1, file.path(TAB, "table1_variables.csv"), row.names = FALSE)
+cat("Saved table1_variables.csv\n")
+# =====================================================================
+# SECTION 28 | Longitudinal sensitivity analyses on the primary dataset
+# (covariates, RNA quality, LEDD, medication state; 2026-08-30)
+# Base data: FINAL_PACKAGE_2026-06-21/04_tables/longitudinal_PIGD_dedup.csv
+# (the exact primary-model dataset, 1999 rows / 1991 complete PIGD rows)
+# =====================================================================
+suppressPackageStartupMessages({ library(dplyr); library(lme4); library(lmerTest) })
+BASE <- "E:/PPMI帕金森数据库专用"
+FD   <- "E:/PPMI帕金森数据库专用/结果/新结果/实验/movementdisorders/new/revision_v2/figures_pc1/data"
+long <- read.csv(file.path(FD, "../../FINAL_PACKAGE_2026-06-21/04_tables/longitudinal_PIGD_dedup.csv"),
+                 stringsAsFactors = FALSE)
+
+# ---- PDSTATE per PATNO+EVENT (dedup identical to primary pipeline) ----
+m3 <- read.csv(file.path(BASE, "运动症状数据/MDS-UPDRS_Part_III_29Jan2026.csv"),
+               fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+m3 <- m3[m3$EVENT_ID %in% c("BL","SC","V04","V06","V08","V10","V12"), ]
+m3 <- m3[!is.na(m3$NP3GAIT) | !is.na(m3$NP3PSTBL) | !is.na(m3$NP3FRZGT), ]
+m3 <- m3[order(m3$PATNO, m3$EVENT_ID), ]
+m3 <- m3[!duplicated(m3[, c("PATNO","EVENT_ID")]), ]
+st <- m3[, c("PATNO","EVENT_ID","PDSTATE")]
+long$PDSTATE <- st$PDSTATE[match(paste(long$PATNO, long$EVENT_ID), paste(st$PATNO, st$EVENT_ID))]
+long$VISIT <- ifelse(long$EVENT_ID == "SC", "BL", long$EVENT_ID)
+long$STATE <- ifelse(long$VISIT == "BL", "BL",
+              ifelse(is.na(long$PDSTATE) | long$PDSTATE == "", "NotRecorded", long$PDSTATE))
+long$STATE <- factor(long$STATE, levels = c("BL","OFF","ON","NotRecorded"))
+
+# ---- covariates (identical to Table 1 / DE pipeline sources) ----
+pc1s <- read.csv(file.path(FD, "pc1_scores.csv"), stringsAsFactors = FALSE)
+pd   <- read.csv(file.path(FD, "../../data/PD_all_clustering_methods.csv"), stringsAsFactors = FALSE)
+pid  <- as.character(long$PATNO)
+long$Age <- as.numeric(pd$AGE_AT_VISIT[match(pid, as.character(pd$PATNO))])
+long$Sex <- factor(pd$SEX[match(pid, as.character(pd$PATNO))])
+meta <- read.csv(file.path(BASE, "metaDataIR3.csv"), check.names = FALSE)
+sid  <- pc1s$SAMPLE_ID[match(pid, as.character(pc1s$PATNO))]
+long$RIN   <- as.numeric(meta[["RIN Value"]][match(sid, meta[["Specimen Bar Code"]])])
+long$Plate <- factor(as.character(meta[["Plate"]][match(sid, meta[["Specimen Bar Code"]])]))
+dx <- read.csv(file.path(BASE, "CI_影像学分析/data/longitudinal_imaging/raw_inputs/PD_Diagnosis_History_05Apr2026.csv"),
+               stringsAsFactors = FALSE)
+dx <- dx[dx$EVENT_ID %in% c("BL","SC"), ]; dx <- dx[!duplicated(dx$PATNO), ]
+p3b <- p3f <- read.csv(file.path(BASE, "运动症状数据/MDS-UPDRS_Part_III_29Jan2026.csv"),
+                       fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+p3b <- p3b[p3b$EVENT_ID %in% c("BL","SC"), ]; p3b <- p3b[!duplicated(p3b$PATNO), ]
+myd <- function(s) { parts <- strsplit(as.character(s), "/")
+  sapply(parts, function(v) { v <- suppressWarnings(as.integer(v))
+    if (length(v) == 2 && !any(is.na(v))) v[1] + 12 * v[2] else NA }) }
+bm <- myd(p3b$EXAMDT[match(pid, as.character(p3b$PATNO))])
+dm <- myd(dx$PDDXDT[match(pid, as.character(dx$PATNO))])
+long$DurYrs <- ifelse(!is.na(bm) & !is.na(dm) & bm >= dm, (bm - dm) / 12, NA)
+
+# ---- time-varying LEDD from the PPMI medication log ----
+long$ev_month <- myd(p3f$EXAMDT[match(paste(pid, long$EVENT_ID),
+                paste(as.character(p3f$PATNO), as.character(p3f$EVENT_ID)))])
+led <- read.csv(file.path(BASE, "运动症状数据/LEDD_Concomitant_Medication_Log_02Feb2026.csv"),
+                fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+led$LEDD <- suppressWarnings(as.numeric(led$LEDD))
+led$start_m <- myd(led$STARTDT); led$stop_m <- myd(led$STOPDT)
+LEDD_v <- rep(0, nrow(long))
+for (i in seq_len(nrow(long))) {
+  rows <- which(as.character(led$PATNO) == pid[i] & !is.na(led$LEDD) & !is.na(led$start_m) &
+                led$start_m <= long$ev_month[i] & (is.na(led$stop_m) | led$stop_m >= long$ev_month[i]))
+  if (length(rows)) LEDD_v[i] <- sum(led$LEDD[rows], na.rm = TRUE)
+}
+long$LEDD <- LEDD_v
+long$VISIT <- factor(long$VISIT, levels = c("BL","V04","V06","V08","V10","V12"))
+
+# ---- medication-state balance by group (per-visit chi-square) ----
+cat("--- state x group composition ---\n")
+print(with(long, table(VISIT, STATE, group)))
+for (v in c("V04","V06","V08","V10","V12")) {
+  d <- long[long$VISIT == v & long$STATE %in% c("OFF","ON","NotRecorded"), ]
+  tb <- table(d$STATE, d$group); tb <- tb[rowSums(tb) > 0, , drop = FALSE]
+  cat(sprintf("  %s state balance chi2 p = %.3f\n", v,
+              tryCatch(chisq.test(tb)$p.value, error = function(e) NA)))
+}
+# ---- LEDD by visit x group ----
+cat("--- LEDD by visit x group ---\n")
+print(as.data.frame(long %>% filter(!is.na(PIGD)) %>% group_by(VISIT, group) %>%
+  summarise(n = n(), mean = round(mean(LEDD), 1), med = median(LEDD), .groups = "drop")), row.names = FALSE)
+
+# ---- models ----
+d0 <- long[!is.na(long$PIGD) & !is.na(long$Age) & !is.na(long$RIN) & !is.na(long$DurYrs), ]
+fit <- function(d, formula_str) {
+  d$VISIT <- droplevels(d$VISIT)
+  m <- lmer(as.formula(formula_str), data = d, REML = TRUE)
+  cm <- coef(summary(m))
+  rr <- grep("VISITV12:groupLow", rownames(cm), fixed = TRUE)
+  data.frame(beta = cm[rr, "Estimate"], SE = cm[rr, "Std. Error"], p = cm[rr, "Pr(>|t|)"],
+             n_obs = nrow(d), n_subj = length(unique(d$PATNO)), row.names = NULL)
+}
+res <- list(
+  M0  = fit(d0, "PIGD ~ VISIT * group + (1 | PATNO)"),
+  M0b = { m <- lmer(PIGD ~ VISIT * group + (1 | PATNO), data = d0, REML = FALSE)
+          cm <- coef(summary(m)); rr <- grep("VISITV12:groupLow", rownames(cm), fixed = TRUE)
+          data.frame(beta = cm[rr,"Estimate"], SE = cm[rr,"Std. Error"], p = cm[rr,"Pr(>|t|)"],
+                     n_obs = nrow(d0), n_subj = length(unique(d0$PATNO))) },
+  M1  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + (1 | PATNO)"),
+  M2  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + (1 | PATNO)"),
+  M5  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + RIN:VISIT + (1 | PATNO)"),
+  M6  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + LEDD + (1 | PATNO)"),
+  M6b = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + LEDD + LEDD:group + (1 | PATNO)"),
+  M7  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + STATE + STATE:VISIT + (1 | PATNO)")
+)
+# RIN x year-5 term from M5
+cm5 <- coef(summary(lmer(PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + RIN:VISIT + (1 | PATNO),
+                         data = d0, REML = TRUE)))
+r5 <- grep("VISITV12:RIN|RIN:VISITV12", rownames(cm5))
+res$M5_RINxV12 <- data.frame(beta = cm5[r5,"Estimate"], SE = cm5[r5,"Std. Error"],
+                             p = cm5[r5,"Pr(>|t|)"], n_obs = nrow(d0), n_subj = length(unique(d0$PATNO)))
+# group x LEDD term from M6b
+cm6b <- coef(summary(lmer(PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + LEDD + LEDD:group + (1 | PATNO),
+                          data = d0, REML = TRUE)))
+ig <- grep("groupLow:LEDD|LEDD:groupLow", rownames(cm6b))
+res$M6b_groupLEDD <- data.frame(beta = cm6b[ig,"Estimate"], SE = cm6b[ig,"Std. Error"],
+                                p = cm6b[ig,"Pr(>|t|)"], n_obs = nrow(d0), n_subj = length(unique(d0$PATNO)))
+# state-restricted (M2' covariates)
+off_r <- d0$VISIT == "BL" | d0$STATE == "OFF"
+on_r  <- d0$VISIT == "BL" | d0$STATE == "ON"
+res$OFF = fit(d0[off_r, ], "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + (1 | PATNO)")
+res$ON  = fit(d0[on_r, ],  "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + (1 | PATNO)")
+cat("--- sensitivity models (year-5 visit-by-group interaction) ---\n")
+print(do.call(rbind, res))
+# subgroup composition for M3/M4
+cat("--- RIN >= 8 subgroup composition ---\n")
+print(table(pc1s$group[pc1s$PATNO %in% unique(d0$PATNO[d0$RIN >= 8 & !is.na(d0$RIN)])]))
+res_all <- do.call(rbind, res)
+write.csv(res_all, file.path(FD, "LMM_PIGD_sensitivity_final.csv"))
+cat("Saved LMM_PIGD_sensitivity_final.csv\n")
+
+# =====================================================================
+# SECTION 29 | 43-outcome sweep rerun: deduplicated data + REML
+# (specification identical to the primary PIGD model; replaces the
+#  earlier ML sweep that retained duplicate baseline records)
+# =====================================================================
+# See tables/sweep_rerun_dedup_reml.R for the full outcome construction
+# (43 pre-specified outcomes; DAT-SBR outcomes use their last available
+# visit, year 4). Key results: PIGD raw p = 0.00081, beta = 0.4989
+# (identical to M0), BH padj = 0.035; only PIGD survives FDR.
+res_sweep <- read.csv(file.path(FD, "../LMM_sweep_rerun_dedup_REML.csv"))
+cat("--- sweep rerun: top 5 by adjusted P ---\n")
+print(head(res_sweep[order(res_sweep$V12_int_padj),
+      c("Outcome","N_obs","V12_int_est","V12_int_p","V12_int_padj")], 5))
+cat("survivors (padj < 0.05):",
+    paste(res_sweep$Outcome[res_sweep$V12_int_padj < 0.05], collapse = ", "), "\n")
+
+# =====================================================================
+# SECTION 30 | Baseline UPSIT availability and group comparison
+# (main-cohort archived UPSIT; V04-V12 follow-up absent in this cohort)
+# =====================================================================
+u <- read.csv(file.path(BASE, "ppmi数据表/Archived_PPMI_Data/University_of_Pennsylvania_Smell_ID_Test-Archived_05Apr2026.csv"),
+              fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+u$UPDRSUSIT <- as.numeric(u$UPSITBK1) + as.numeric(u$UPSITBK2) + as.numeric(u$UPSITBK3) + as.numeric(u$UPSITBK4)
+ubl <- u[u$EVENT_ID == "BL" & u$PATNO %in% pc1s$PATNO, ]
+ubl <- ubl[!duplicated(ubl$PATNO), ]
+ubl$group <- pc1s$group[match(ubl$PATNO, pc1s$PATNO)]
+cat("baseline UPSIT available:", sum(!is.na(ubl$UPDRSUSIT)), "/", nrow(ubl), "\n")
+lo <- ubl$UPDRSUSIT[ubl$group == "Low"];  lo <- lo[!is.na(lo)]
+hi <- ubl$UPDRSUSIT[ubl$group == "High"]; hi <- hi[!is.na(hi)]
+cat(sprintf("Low CI: %.2f (%.2f), n=%d | High CI: %.2f (%.2f), n=%d | Wilcoxon p = %.4f\n",
+            mean(lo), sd(lo), length(lo), mean(hi), sd(hi), length(hi),
+            wilcox.test(lo, hi)$p.value))
