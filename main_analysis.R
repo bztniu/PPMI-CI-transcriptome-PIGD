@@ -2591,7 +2591,7 @@ f2h_kmeans <- ggplot(km_imm, aes(d, Cell_label, color = sig)) +
   )
 
 # (Panel e removed: legacy 9-gene cell-composition panel was dropped in favour of the
-# 10-gene PD-risk framework; see Supplementary Table S13 for cell-composition sensitivity.)
+# 10-gene PD-risk framework; see Supplementary Table S12 for cell-composition sensitivity.)
 
 fig2 <- patchwork::wrap_plots(
   f2a, f2b_gsea, f2c_go, f2d_risk_low,
