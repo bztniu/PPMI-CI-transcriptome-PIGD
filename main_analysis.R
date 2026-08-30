@@ -3524,7 +3524,9 @@ res <- list(
   M5  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + RIN:VISIT + (1 | PATNO)"),
   M6  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + LEDD + (1 | PATNO)"),
   M6b = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + LEDD + LEDD:group + (1 | PATNO)"),
-  M7  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + STATE + STATE:VISIT + (1 | PATNO)")
+  M7  = fit(d0, "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + STATE + STATE:VISIT + (1 | PATNO)"),
+  M3  = fit(d0[d0$RIN >= 8 & !is.na(d0$RIN), ], "PIGD ~ VISIT * group + (1 | PATNO)"),
+  M4  = fit(d0[d0$RIN >= 8 & !is.na(d0$RIN), ], "PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + (1 | PATNO)")
 )
 # RIN x year-5 term from M5
 cm5 <- coef(summary(lmer(PIGD ~ VISIT * group + Age + Sex + RIN + Plate + DurYrs + RIN:VISIT + (1 | PATNO),
