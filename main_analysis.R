@@ -23,6 +23,37 @@
 # =====================================================================
 
 # =====================================================================
+# =====================================================================
+# TRACEABILITY MATRIX | manuscript results -> code sections
+# Every number in Results / Tables / Figures can be reproduced from
+# the sections below (single file; run top to bottom).
+# ---------------------------------------------------------------------
+# Abstract/Results: year-5 PIGD interaction beta=+0.50, p=0.0008 ....... SECTION 12 (M0)
+#   BH-adjusted p = 0.035 (43 outcomes, only PIGD survives) ............ SECTION 29
+#   k-means p=0.006 / hierarchical p=0.0004 ............................ SECTION 16 (S16 spec)
+#   continuous PC1 x V12 p=0.015, ~0.18 points per 1-SD ................ SECTION 12 (S16 spec)
+#   quadratic group-by-time^2 (beta=0.03, p=0.047) ..................... SECTION 12 (S16 spec)
+#   leukocyte-fraction adjustment ...................................... SECTION 20
+#   covariate/RIN/LEDD/state sensitivities (M1-M7, OFF/ON) ............. SECTION 28
+#   retention 148/196 vs 137/197 ....................................... SECTION 12 (S16 spec)
+# Differential expression: 28,626 retained; 2,306 DEGs (2,183/123) ..... SECTION 05
+# KEGG-GSEA / olfactory NES=2.86 / ribosome NES=-4.06 .................. SECTION 06
+# GO enrichment (Figure 2d) ............................................ SECTION 06
+# Risk genes: 90 signals -> 85 genes -> 78 both cohorts; GPNMB 0.95 .... SECTION 07
+# Three robust genes (ITGA8/RIMS1/DNAH17) + cell adjustment ............ SECTION 07/S12 in tables
+# ssGSEA validation (r=0.97 vs equal-weight; r=0.82/0.88) .............. SECTION 08
+# GENEPARK re-estimation, risk-gene replication, immune ............... SECTIONS 10-11
+# Immune NNLS (16/19 cell types, neutrophils d=0.39, CD8, eosinophils) . SECTION 09 + SECTION 11
+# DAT-SBR subregions (15 measures, all ns) ............................. SECTION 17
+# Fluid biomarkers (SAA, NfL...) ....................................... SECTION 18
+# Table 1 (15 baseline variables incl. UPSIT) .......................... SECTION 27
+# Figure 1 -> SECTION 22 | Figure 2 -> SECTION 23 | Figure 3 -> SECTION 24
+# Supplementary Figures -> SECTIONS 25-26
+# Supplementary Tables S1-S23: values are printed/written by the
+#   corresponding sections; S16/S19/S23 summary tables correspond to
+#   SECTIONS 12/29/28 respectively.
+# =====================================================================
+
 # SECTION 01 | Package dependencies
 # =====================================================================
 
@@ -1086,6 +1117,10 @@ cat("DONE\n")
 
 # =====================================================================
 # SECTION 13 | Pre-specified longitudinal outcome sweep (43 outcomes)
+# !! SUPERSEDED: this section used the pre-audit pipeline (ML fitting,
+# duplicate SC/BL baseline rows retained). Manuscript numbers come from
+# SECTION 29 (deduplicated + REML, identical to the primary model).
+# Retained for provenance only.
 # =====================================================================
 
 # ============================================================
@@ -1205,6 +1240,10 @@ cat(sprintf("\nSaved: %s/LMM_sweep_all_outcomes.csv\n", OUT))
 
 # =====================================================================
 # SECTION 14 | Full longitudinal outcome sweep
+# !! SUPERSEDED: see SECTION 13 banner. The COMPREHENSIVE csv shipped
+# with the figures was overwritten in place by the Section-29 spec;
+# re-running THIS section would regenerate the superseded version.
+# Retained for provenance only.
 # =====================================================================
 
 # ============================================================
@@ -3515,21 +3554,120 @@ cat("Saved LMM_PIGD_sensitivity_final.csv\n")
 
 # =====================================================================
 # SECTION 29 | 43-outcome sweep rerun: deduplicated data + REML
-# (specification identical to the primary PIGD model; replaces the
-#  earlier ML sweep that retained duplicate baseline records)
-# =====================================================================
-# See tables/sweep_rerun_dedup_reml.R for the full outcome construction
-# (43 pre-specified outcomes; DAT-SBR outcomes use their last available
-# visit, year 4). Key results: PIGD raw p = 0.00081, beta = 0.4989
-# (identical to M0), BH padj = 0.035; only PIGD survives FDR.
-res_sweep <- read.csv(file.path(FD, "../LMM_sweep_rerun_dedup_REML.csv"))
-cat("--- sweep rerun: top 5 by adjusted P ---\n")
-print(head(res_sweep[order(res_sweep$V12_int_padj),
-      c("Outcome","N_obs","V12_int_est","V12_int_p","V12_int_padj")], 5))
-cat("survivors (padj < 0.05):",
-    paste(res_sweep$Outcome[res_sweep$V12_int_padj < 0.05], collapse = ", "), "\n")
+# (specification identical to the primary PIGD model: SC->BL remap,
+#  one row per PATNO+VISIT, REML. BH across 43 outcomes. Replaces the
+#  superseded Section 13/14 ML sweeps. Manuscript: padj = 0.035,
+#  only PIGD survives; axial padj = 0.064.)
+setwd(BASE)
+OUTSW <- file.path(FD, "..")
+pc1g <- read.csv(file.path(FD, "pc1_scores.csv"))[, c("PATNO", "group")]
+VIS <- c("SC","BL","V04","V06","V08","V10","V12")
+rd <- function(f) suppressWarnings(read_csv(f, show_col_types = FALSE)) %>% filter(EVENT_ID %in% VIS)
+p1c <- rd("运动症状数据/MDS-UPDRS_Part_I_31Jan2026.csv")
+p1p <- rd("运动症状数据/MDS-UPDRS_Part_I_Patient_Questionnaire_31Jan2026.csv")
+p2  <- rd("运动症状数据/MDS_UPDRS_Part_II__Patient_Questionnaire_31Jan2026.csv")
+p3s <- rd("运动症状数据/MDS-UPDRS_Part_III_29Jan2026.csv") %>% arrange(PATNO, EVENT_ID) %>% distinct(PATNO, EVENT_ID, .keep_all = TRUE)
+p4  <- rd("运动症状数据/MDS-UPDRS_Part_IV__Motor_Complications_29Jan2026.csv")
+moca<- rd("运动症状数据/Montreal_Cognitive_Assessment__MoCA__31Jan2026.csv")
+rb  <- rd("REM_Sleep_Behavior_Disorder_Questionnaire_03Feb2026.csv")
+sca <- rd("SCOPA-AUT_07Feb2026.csv")
+dat <- rd("运动症状数据/Xing_Core_Lab_-_Quant_SBR_23Feb2026.csv")
+SS <- function(d, cols) rowSums(sapply(intersect(cols, colnames(d)), function(c) as.numeric(d[[c]])), na.rm = TRUE)
+mk <- function(d, score, nm) data.frame(PATNO = d$PATNO, EVENT_ID = d$EVENT_ID, Score = score, Outcome = nm)
+L <- list()
+L[["UPDRS_I_clin"]] <- mk(p1c, p1c$NP1RTOT, "UPDRS_I_clin")
+L[["UPDRS_I_pat"]]  <- mk(p1p, p1p$NP1PTOT, "UPDRS_I_pat")
+L[["UPDRS_II"]]     <- mk(p2,  p2$NP2PTOT,  "UPDRS_II")
+L[["UPDRS_III"]]    <- mk(p3s, p3s$NP3TOT,  "UPDRS_III")
+L[["UPDRS_IV"]]     <- mk(p4,  p4$NP4TOT,   "UPDRS_IV")
+L[["MoCA"]]         <- mk(moca, moca$MCATOT, "MoCA")
+L[["NHY"]]          <- mk(p3s, p3s$NHY,     "NHY")
+L[["PIGD"]]         <- mk(p3s, SS(p3s, c("NP3GAIT","NP3PSTBL","NP3FRZGT")), "PIGD")
+L[["Tremor"]]       <- mk(p3s, SS(p3s, c("NP3PTRMR","NP3PTRML","NP3KTRMR","NP3KTRML","NP3RTARU","NP3RTALU","NP3RTARL","NP3RTALL")), "Tremor")
+L[["RestTremor"]]   <- mk(p3s, SS(p3s, c("NP3RTARU","NP3RTALU","NP3RTARL","NP3RTALL")), "RestTremor")
+it12 <- c("DRMVIVID","DRMAGRAC","DRMNOCTB","SLPLMBMV","SLPINJUR","DRMVERBL","DRMFIGHT","DRMUMV","DRMOBJFL","MVAWAKEN","DRMREMEM","SLPDSTRB")
+neuro <- c("STROKE","HETRA","PARKISM","RLS","NARCLPSY","DEPRS","EPILEPSY","BRNINFM","CNSOTH")
+L[["RBDSQ"]] <- mk(rb, SS(rb, it12) + as.integer(SS(rb, neuro) > 0), "RBDSQ")
+sca_na <- sca; for (cc in paste0("SCAU", 1:21)) if (cc %in% colnames(sca_na)) sca_na[[cc]][sca_na[[cc]] == 9] <- NA
+L[["SCOPA_total"]] <- mk(sca_na, SS(sca_na, paste0("SCAU", 1:21)), "SCOPA_total")
+L[["DAT_striatum"]] <- mk(dat, as.numeric(dat$STRIATUM_REF_CWM), "DAT_striatum")
+L[["DAT_caudate"]]  <- mk(dat, as.numeric(dat$CAUDATE_REF_CWM),  "DAT_caudate")
+L[["DAT_putamen"]]  <- mk(dat, as.numeric(dat$PUTAMEN_REF_CWM),  "DAT_putamen")
+L[["MoCA_visuospatial"]] <- mk(moca, SS(moca, c("MCAALTTM","MCACUBE","MCACLCKC","MCACLCKN","MCACLCKH")), "MoCA_visuospatial")
+L[["MoCA_naming"]]       <- mk(moca, SS(moca, c("MCALION","MCARHINO","MCACAMEL")), "MoCA_naming")
+L[["MoCA_attention"]]    <- mk(moca, SS(moca, c("MCAFDS","MCABDS","MCAVIGIL","MCASER7")), "MoCA_attention")
+L[["MoCA_language"]]     <- mk(moca, SS(moca, c("MCASNTNC","MCAVF")), "MoCA_language")
+L[["MoCA_abstraction"]]  <- mk(moca, SS(moca, c("MCAABSTR")), "MoCA_abstraction")
+L[["MoCA_recall"]]       <- mk(moca, SS(moca, c("MCAREC1","MCAREC2","MCAREC3","MCAREC4","MCAREC5")), "MoCA_recall")
+L[["MoCA_orientation"]]  <- mk(moca, SS(moca, c("MCADATE","MCAMONTH","MCAYR","MCADAY","MCAPLACE","MCACITY")), "MoCA_orientation")
+L[["UPDRS3_rigidity"]]     <- mk(p3s, SS(p3s, c("NP3RIGN","NP3RIGRU","NP3RIGLU","NP3RIGRL","NP3RIGLL")), "UPDRS3_rigidity")
+L[["UPDRS3_bradykinesia"]] <- mk(p3s, SS(p3s, c("NP3FTAPR","NP3FTAPL","NP3HMOVR","NP3HMOVL","NP3PRSPR","NP3PRSPL","NP3TTAPR","NP3TTAPL","NP3LGAGR","NP3LGAGL")), "UPDRS3_bradykinesia")
+L[["UPDRS3_axial"]]        <- mk(p3s, SS(p3s, c("NP3SPCH","NP3GAIT","NP3FRZGT","NP3PSTBL")), "UPDRS3_axial")
+for (it in c("NP1COG","NP1HALL","NP1DPRS","NP1ANXS","NP1APAT","NP1DDS")) L[[it]] <- mk(p1c, as.numeric(p1c[[it]]), it)
+for (it in c("NP1SLPN","NP1SLPD","NP1PAIN","NP1URIN","NP1CNST","NP1LTHD","NP1FATG")) L[[it]] <- mk(p1p, as.numeric(p1p[[it]]), it)
+L[["SCOPA_GI"]]      <- mk(sca_na, SS(sca_na, paste0("SCAU", 1:7)),   "SCOPA_GI")
+L[["SCOPA_urinary"]] <- mk(sca_na, SS(sca_na, paste0("SCAU", 8:13)),  "SCOPA_urinary")
+L[["SCOPA_cardio"]]  <- mk(sca_na, SS(sca_na, paste0("SCAU", 14:16)), "SCOPA_cardio")
+L[["SCOPA_thermo"]]  <- mk(sca_na, SS(sca_na, c("SCAU17","SCAU18","SCAU20","SCAU21")), "SCOPA_thermo")
+L[["SCOPA_pupillo"]] <- mk(sca_na, SS(sca_na, c("SCAU19")), "SCOPA_pupillo")
+cat(sprintf("Total indicators: %d\n", length(L)))
+res29 <- data.frame()
+for (nm in names(L)) {
+  if (nm == "PIGD") {
+    d <- read.csv(file.path(FD, "../../FINAL_PACKAGE_2026-06-21/04_tables/longitudinal_PIGD_dedup.csv"), stringsAsFactors = FALSE)
+    d$Score <- d$PIGD
+    d <- d[, c("PATNO","EVENT_ID","Score","group")]
+    d$PATNO <- factor(d$PATNO); d$group <- factor(d$group, levels = c("High","Low"))
+  } else {
+    d <- L[[nm]] %>% inner_join(pc1g, by = "PATNO") %>%
+      mutate(PATNO = factor(PATNO), group = factor(group, levels = c("High","Low")))
+  }
+  d$VISIT <- factor(ifelse(d$EVENT_ID == "SC", "BL", d$EVENT_ID),
+                    levels = c("BL","V04","V06","V08","V10","V12"))
+  d <- d[!is.na(d$Score), ]
+  if (nm != "PIGD") {
+    d <- d[order(d$PATNO, d$VISIT, is.na(d$Score)), ]
+    d <- d[!duplicated(d[, c("PATNO","VISIT")]), ]
+  }
+  d$VISIT <- droplevels(d$VISIT)
+  if (nlevels(d$VISIT) < 3 || nrow(d) < 50) { cat(sprintf("SKIP %s\n", nm)); next }
+  lastv <- tail(levels(d$VISIT), 1)
+  v12p <- NA; v12est <- NA; minp <- NA
+  mf <- tryCatch(lmer(Score ~ VISIT * group + (1 | PATNO), data = d, REML = TRUE), error = function(e) NULL)
+  if (!is.null(mf)) {
+    cm <- coef(summary(mf))
+    int_rows <- grep(":groupLow$", rownames(cm))
+    if (length(int_rows) > 0) {
+      ips <- cm[int_rows, "Pr(>|t|)"]; minp <- min(ips, na.rm = TRUE)
+      v12r <- grep(paste0("VISIT", lastv, ":groupLow"), rownames(cm), fixed = TRUE)
+      if (length(v12r) > 0) { v12p <- cm[v12r[1], "Pr(>|t|)"]; v12est <- cm[v12r[1], "Estimate"] }
+    }
+  }
+  grp_p <- NA; int_p <- NA; int_est <- NA
+  d$Time <- as.numeric(d$VISIT) - 1
+  mc <- tryCatch(lmer(Score ~ Time * group + (1 + Time | PATNO), data = d, REML = TRUE), error = function(e)
+        tryCatch(lmer(Score ~ Time * group + (1 | PATNO), data = d, REML = TRUE), error = function(e2) NULL))
+  if (!is.null(mc)) {
+    cmc <- coef(summary(mc))
+    gr <- grep("^groupLow$", rownames(cmc)); ir <- grep("Time:groupLow", rownames(cmc), fixed = TRUE)
+    if (length(gr) > 0) grp_p <- cmc[gr[1], "Pr(>|t|)"]
+    if (length(ir) > 0) { int_p <- cmc[ir[1], "Pr(>|t|)"]; int_est <- cmc[ir[1], "Estimate"] }
+  }
+  res29 <- rbind(res29, data.frame(Outcome = nm, N_obs = nrow(d), N_subj = nlevels(factor(d$PATNO)),
+                               LastVisit = lastv, V12_int_est = v12est, V12_int_p = v12p,
+                               MinVisit_int_p = minp, Cont_grp_p = grp_p,
+                               Cont_int_est = int_est, Cont_int_p = int_p,
+                               stringsAsFactors = FALSE))
+}
+res29$V12_int_padj <- p.adjust(res29$V12_int_p, "BH")
+res29$Cont_int_padj <- p.adjust(res29$Cont_int_p, "BH")
+res29$Cont_grp_padj <- p.adjust(res29$Cont_grp_p, "BH")
+res29 <- res29[order(res29$V12_int_p), ]
+print(res29 %>% mutate(across(where(is.numeric), ~round(., 4))), row.names = FALSE)
+cat(sprintf("Survivors (padj < 0.05): %s\n",
+    paste(res29$Outcome[!is.na(res29$V12_int_padj) & res29$V12_int_padj < 0.05], collapse = ", ")))
+write.csv(res29, file.path(OUTSW, "LMM_sweep_rerun_dedup_REML.csv"), row.names = FALSE)
 
-# =====================================================================
 # SECTION 30 | Baseline UPSIT availability and group comparison
 # (main-cohort archived UPSIT; V04-V12 follow-up absent in this cohort)
 # =====================================================================
@@ -3545,3 +3683,55 @@ hi <- ubl$UPDRSUSIT[ubl$group == "High"]; hi <- hi[!is.na(hi)]
 cat(sprintf("Low CI: %.2f (%.2f), n=%d | High CI: %.2f (%.2f), n=%d | Wilcoxon p = %.4f\n",
             mean(lo), sd(lo), length(lo), mean(hi), sd(hi), length(hi),
             wilcox.test(lo, hi)$p.value))
+
+# =====================================================================
+# SECTION 31 | Score and partition consistency metrics
+# (requires SECTION 03 to have run: Z, ccp, scores; SECTION 08 for ssGSEA)
+# Covers Results numbers: PC1 vs equal-weight r=0.97, ssGSEA r=0.82/0.88,
+# k-means kappa=0.934 (96.7% agreement), hierarchical kappa=0.812 (90.6%),
+# consensus k=3 cluster sizes 64/222/107 (low/middle/high trichotomy).
+# =====================================================================
+cat("--- score correlations (manuscript: r=0.97 equal-weight; 0.82/0.88 ssGSEA) ---\n")
+sc31 <- scores
+cat(sprintf("PC1 vs equal-weight mean z (SumZ): Pearson r = %.3f\n",
+            cor(sc31$PC1, sc31$SumZ, use = "complete.obs")))
+med_split <- function(x) ifelse(x > median(x), "High", "Low")
+ref31 <- med_split(sc31$PC1); names(ref31) <- sc31$SAMPLE_ID
+# k-means (k=2) on the 66-gene z matrix, label by mean PC1
+set.seed(123)
+km2 <- kmeans(Z, centers = 2, nstart = 25)
+km_raw <- rownames(Z)  # sample ids
+km_lab <- ifelse(km2$cluster == 1, "c1", "c2")
+km_meanPC1 <- tapply(PC1[match(km_raw, sc31$SAMPLE_ID)], km_lab, mean)
+km_low <- names(which.min(km_meanPC1))
+km_group <- ifelse(km_lab == km_low, "Low", "High"); names(km_group) <- km_raw
+ref_k <- ref31[names(km_group)]
+tb_km <- table(km_group, ref_k)
+kap <- function(tb) { po <- sum(diag(tb))/sum(tb); pe <- sum(rowSums(tb)*colSums(tb))/sum(tb)^2
+                      (po - pe)/(1 - pe) }
+cat(sprintf("k-means (k=2) vs PC1 median split: kappa = %.3f, agreement = %.1f%%\n",
+            kap(tb_km), 100 * sum(diag(tb_km))/sum(tb_km)))
+# hierarchical clustering (Ward.D2)
+hc <- hclust(dist(Z), method = "ward.D2")
+hc2 <- cutree(hc, k = 2)
+hc_lab <- ifelse(hc2 == 1, "c1", "c2")
+hc_meanPC1 <- tapply(PC1[match(names(hc2), sc31$SAMPLE_ID)], hc_lab, mean)
+hc_low <- names(which.min(hc_meanPC1))
+hc_group <- ifelse(hc_lab == hc_low, "Low", "High"); names(hc_group) <- names(hc2)
+ref_h <- ref31[names(hc_group)]
+tb_hc <- table(hc_group, ref_h)
+cat(sprintf("hierarchical (Ward.D2, k=2) vs PC1 median split: kappa = %.3f, agreement = %.1f%%\n",
+            kap(tb_hc), 100 * sum(diag(tb_hc))/sum(tb_hc)))
+# consensus k=3 cluster sizes and their position on the PC1 axis
+cc3 <- ccp[[3]]$consensusClass
+cc3_id <- names(cc3)
+cc3_grp <- ifelse(cc3 == 1, "c1", ifelse(cc3 == 2, "c2", "c3"))
+cc3_df <- data.frame(SAMPLE_ID = cc3_id, cl = cc3_grp,
+                     PC1 = PC1[match(cc3_id, sc31$SAMPLE_ID)],
+                     med = ref31[cc3_id])
+ord <- order(tapply(cc3_df$PC1, cc3_df$cl, mean))
+cc3_df$cl <- factor(cc3_df$cl, levels = paste0("c", ord))
+cat("--- consensus k=3 cluster sizes (low/middle/high on the PC1 axis) ---\n")
+print(table(cc3_df$cl))
+cat("--- cluster x median-split composition (middle cluster straddles the median) ---\n")
+print(table(cc3_df$cl, cc3_df$med))
