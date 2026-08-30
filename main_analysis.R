@@ -50,7 +50,7 @@
 # Figure 1 -> SECTION 22 | Figure 2 -> SECTION 23 | Figure 3 -> SECTION 24
 # Supplementary Figures -> SECTIONS 25-26
 # Supplementary Tables S1-S23: values are printed/written by the
-#   corresponding sections; S16/S19/S23 summary tables correspond to
+#   corresponding sections; S16/S19/S10 summary tables correspond to
 #   SECTIONS 12/29/28 respectively.
 # =====================================================================
 

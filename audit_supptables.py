@@ -27,85 +27,85 @@ try:
     src = rd(os.path.join(T4, 'S1_riskgenes_adjusted.csv'))
     de = {d['Symbol']: num(d['log2FoldChange']) for d in rd(os.path.join(FD, 'de_full.csv'))}
     smap = {g: de.get(g) for g in {d['Gene'] for d in src}}
-    xs = rows('TableS1')
+    xs = rows('TableS11')
     hdr_i = next(i for i, r in enumerate(xs) if r[1] == 'Gene')
     data = [r for r in xs[hdr_i+1:] if r[0] and r[1] and not str(r[0]).startswith(('Abbrev','Note'))]
     bad = [(r[1], r[2], smap.get(r[1])) for r in data
            if smap.get(r[1]) is not None and num(r[2]) is not None
            and abs(num(r[2]) - smap[r[1]]) > 5e-4]
     ok = len(data) == 90 and not bad
-    R['S1'] = ('PASS' if ok else 'FAIL', f'rows={len(data)} mismatches={len(bad)}')
+    R['S11'] = ('PASS' if ok else 'FAIL', f'rows={len(data)} mismatches={len(bad)}')
 except Exception as e:
-    R['S1'] = ('FAIL', repr(e))
+    R['S11'] = ('FAIL', repr(e))
 
 # S2: 63 mapped genes
 try:
     src = rd(os.path.join(T4, 'TableS_genepark_CI_gene_mapping.csv'))
-    xs = rows('TableS2')
+    xs = rows('TableS23')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] == 'Gene')
     data = [r for r in xs[hdr_i+1:] if r[0] and num(r[1]) is not None]
-    R['S2'] = ('PASS' if len(data) == len(src) == 63 else 'FAIL', f'rows={len(data)} src={len(src)}')
+    R['S23'] = ('PASS' if len(data) == len(src) == 63 else 'FAIL', f'rows={len(data)} src={len(src)}')
 except Exception as e:
-    R['S2'] = ('FAIL', repr(e))
+    R['S23'] = ('FAIL', repr(e))
 
 # S3: 66 genes = ci_expr columns
 try:
     with open(os.path.join(FD, 'ci_expr.csv'), encoding='utf-8-sig') as f:
         genes_src = next(csv.reader(f))[1:]
-    xs = rows('TableS3')
+    xs = rows('TableS1')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] == 'Gene')
     genes_x = [r[0] for r in xs[hdr_i+1:] if r[0] and not str(r[0]).startswith('Abbrev')]
-    R['S3'] = ('PASS' if sorted(genes_src) == sorted(genes_x) and len(genes_x) == 66 else 'FAIL', f'n={len(genes_x)}')
+    R['S1'] = ('PASS' if sorted(genes_src) == sorted(genes_x) and len(genes_x) == 66 else 'FAIL', f'n={len(genes_x)}')
 except Exception as e:
-    R['S3'] = ('FAIL', repr(e))
+    R['S1'] = ('FAIL', repr(e))
 
 # S4: 393 rows, groups 196/197
 try:
     src = rd(os.path.join(FD, 'pc1_scores.csv'))
-    xs = rows('TableS4')
+    xs = rows('TableS2')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] == 'PATNO')
     data = [r for r in xs[hdr_i+1:] if r[0] and r[3] and not str(r[0]).startswith(('Abbrev','Note'))]
     ok = len(data) == 393 and sum(1 for r in data if r[3] == 'Low') == 196 and sum(1 for r in data if r[3] == 'High') == 197
-    R['S4'] = ('PASS' if ok else 'FAIL', f'n={len(data)}')
+    R['S2'] = ('PASS' if ok else 'FAIL', f'n={len(data)}')
 except Exception as e:
-    R['S4'] = ('FAIL', repr(e))
+    R['S2'] = ('FAIL', repr(e))
 
 # S5/S6/S7/S8 vs rds dump
 dump = rd(r'C:\Users\baize\s678_dump.csv')[0]
 try:
+    xs = rows('TableS3')
+    txt = ' '.join(str(c) for r in xs for c in r if c is not None)
+    R['S3'] = ('PASS' if '0.506' in txt else 'FAIL', 'PC1 variance 50.6%')
+except Exception as e:
+    R['S3'] = ('FAIL', repr(e))
+try:
+    xs = rows('TableS4')
+    txt = ' '.join(str(c) for r in xs for c in r if c is not None)
+    R['S4'] = ('PASS' if abs(num(next(c for r in xs for c in r if c and str(c).startswith('0.0104'))) - float(dump['dip_D'])) < 1e-6 else 'FAIL', 'dip D')
+except Exception as e:
+    R['S4'] = ('FAIL', repr(e))
+try:
     xs = rows('TableS5')
     txt = ' '.join(str(c) for r in xs for c in r if c is not None)
-    R['S5'] = ('PASS' if '0.506' in txt else 'FAIL', 'PC1 variance 50.6%')
+    R['S5'] = ('PASS' if ('-2505' in txt and '-2512' in txt and abs(float(dump['deltaBIC']) - 6.77) < 0.05) else 'FAIL',
+               f'deltaBIC={float(dump["deltaBIC"]):.2f}')
 except Exception as e:
     R['S5'] = ('FAIL', repr(e))
 try:
     xs = rows('TableS6')
-    txt = ' '.join(str(c) for r in xs for c in r if c is not None)
-    R['S6'] = ('PASS' if abs(num(next(c for r in xs for c in r if c and str(c).startswith('0.0104'))) - float(dump['dip_D'])) < 1e-6 else 'FAIL', 'dip D')
-except Exception as e:
-    R['S6'] = ('FAIL', repr(e))
-try:
-    xs = rows('TableS7')
-    txt = ' '.join(str(c) for r in xs for c in r if c is not None)
-    R['S7'] = ('PASS' if ('-2505' in txt and '-2512' in txt and abs(float(dump['deltaBIC']) - 6.77) < 0.05) else 'FAIL',
-               f'deltaBIC={float(dump["deltaBIC"]):.2f}')
-except Exception as e:
-    R['S7'] = ('FAIL', repr(e))
-try:
-    xs = rows('TableS8')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] == 'K')
     data = {str(r[0]): num(r[1]) for r in xs[hdr_i+1:] if r[0] is not None and num(r[1]) is not None}
     exp = {k: float(v) for k, v in {'2': dump['PAC_k2'], '3': dump['PAC_k3'], '4': dump['PAC_k4'], '5': dump['PAC_k5'], '6': dump['PAC_k6']}.items()}
     bad = [k for k in exp if abs(data[k] - exp[k]) > 1e-9]
-    R['S8'] = ('PASS' if not bad else 'FAIL', f'PAC={ {k: round(v,4) for k,v in data.items()} } bad={bad}')
+    R['S6'] = ('PASS' if not bad else 'FAIL', f'PAC={ {k: round(v,4) for k,v in data.items()} } bad={bad}')
 except Exception as e:
-    R['S8'] = ('FAIL', repr(e))
+    R['S6'] = ('FAIL', repr(e))
 
 # S9: 28626 genes, GPNMB log2FC vs de_full
 try:
     src = rd(os.path.join(FD, 'de_full.csv'))
     smap = {(d['Symbol'], d['ENSG']): num(d['log2FoldChange']) for d in src}
-    xs = rows('TableS9')
+    xs = rows('TableS7')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] == 'Symbol')
     data = [r for r in xs[hdr_i+1:] if r[0] and not str(r[0]).startswith(('Abbrev','Note'))]
     gi = 0; li = next(i for i, h in enumerate(xs[hdr_i]) if h == 'log2FC')
@@ -114,9 +114,9 @@ try:
            if smap.get((r[0], r[ei])) is not None and num(r[li]) is not None
            and abs(num(r[li]) - smap[(r[0], r[ei])]) > 1e-6][:5]
     ok = len(data) == len(src) == 28626 and not bad
-    R['S9'] = ('PASS' if ok else 'FAIL', f'rows={len(data)} GPNMB x={num(next(r[li] for r in data if r[0]=="GPNMB")):.4f} mismatches={len(bad)}')
+    R['S7'] = ('PASS' if ok else 'FAIL', f'rows={len(data)} GPNMB x={num(next(r[li] for r in data if r[0]=="GPNMB")):.4f} mismatches={len(bad)}')
 except Exception as e:
-    R['S9'] = ('FAIL', repr(e))
+    R['S7'] = ('FAIL', repr(e))
 
 # S10: KEGG ribosome + olfactory
 try:
@@ -127,7 +127,7 @@ try:
         v = num(d.get('NES'))
         if k and v is not None:
             smap[k] = v
-    xs = rows('TableS10')
+    xs = rows('TableS8')
     hdr_i = next((i for i, r in enumerate(xs) if r[0] == 'ID'), 1)
     nes_idx = next(i for i, h in enumerate(xs[hdr_i]) if h == 'NES')
     bad = []
@@ -140,21 +140,21 @@ try:
                 ncmp += 1
                 if nes is None or abs(nes - v) > 1e-3: bad.append((r[0][:30], nes, v))
                 break
-    R['S10'] = ('PASS' if ncmp >= 5 and not bad else 'FAIL', f'compared={ncmp} bad={bad[:2]}')
+    R['S8'] = ('PASS' if ncmp >= 5 and not bad else 'FAIL', f'compared={ncmp} bad={bad[:2]}')
 except Exception as e:
-    R['S10'] = ('FAIL', repr(e))
+    R['S8'] = ('FAIL', repr(e))
 
 # S11: GO top8 names vs ADJUSTED csv (passed before, keep)
 try:
     src = rd(os.path.join(T4, 'GO_lowCI_up_ADJUSTED.csv'))
-    xs = rows('TableS11')
+    xs = rows('TableS9')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] in ('ID','Pathway','Description') or (r[0] and 'GO' in str(r[0])[:4]))
     names_x = [str(r[1]) if len(r) > 1 and r[1] else str(r[0]) for r in xs[hdr_i+1:] if r[0] and not str(r[0]).startswith(('Abbrev','Note'))][:8]
     names_s = [d.get('Description', d.get('name', d.get('Term',''))) for d in src[:8]]
-    R['S11'] = ('PASS' if [n.lower()[:25] for n in names_x] == [n.lower()[:25] for n in names_s] else 'FAIL',
+    R['S9'] = ('PASS' if [n.lower()[:25] for n in names_x] == [n.lower()[:25] for n in names_s] else 'FAIL',
                 f'x0={names_x[0][:22]} s0={names_s[0][:22]}')
 except Exception as e:
-    R['S11'] = ('FAIL', repr(e))
+    R['S9'] = ('FAIL', repr(e))
 
 # S12: key genes present with adjusted stats
 try:
@@ -322,7 +322,7 @@ except Exception as e:
 # S23: 14 rows vs final sensitivity csv
 try:
     src = rd(os.path.join(FD, 'LMM_PIGD_sensitivity_final.csv'))
-    xs = rows('TableS23')
+    xs = rows('TableS10')
     hdr_i = next(i for i, r in enumerate(xs) if r[0] == 'Model')
     data = [r for r in xs[hdr_i+1:] if r[0] and not str(r[0]).startswith('Factor-time')]
     smap = {d.get('Model', d.get('')): (num(d['beta']), num(d['p'])) for d in src}
@@ -342,9 +342,9 @@ try:
         if num(r[2]) is None or abs(num(r[2]) - beta) > 5e-4: bad.append((label[:30], 'beta'))
         pd_ = abs(num(r[4]) - pv) if (num(r[4]) is not None and pv is not None) else 9
         if pd_ > 5e-4 and pd_ / max(abs(pv), 1e-12) > 0.05: bad.append((label[:30], 'p'))
-    R['S23'] = ('PASS' if not bad and len(data) >= 12 else 'FAIL', f'rows={len(data)} src={len(src)} bad={bad[:3]}')
+    R['S10'] = ('PASS' if not bad and len(data) >= 12 else 'FAIL', f'rows={len(data)} src={len(src)} bad={bad[:3]}')
 except Exception as e:
-    R['S23'] = ('FAIL', repr(e))
+    R['S10'] = ('FAIL', repr(e))
 
 print('=' * 62)
 npass = 0
