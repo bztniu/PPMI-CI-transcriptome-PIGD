@@ -1,4 +1,4 @@
-# Peripheral blood mitochondrial complex I transcriptomic axis in Parkinson's disease
+# Peripheral blood mitochondrial complex I transcriptome continuum and year-5 PIGD progression in Parkinson's disease
 
 This repository contains the R/Python analysis code used for the manuscript on a peripheral-blood mitochondrial complex I (CI) transcriptomic axis and late PIGD progression in Parkinson's disease.
 
